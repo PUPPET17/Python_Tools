@@ -1,0 +1,39 @@
+// ER diagram of chat table
+digraph ER {
+	node [fontname="Microsoft YaHei"]
+	edge [arrowhead=normal]
+	yonghu [label=yonghu fontSize=20 fontname="Microsoft YaHei" shape=box]
+	id [label="id
+主键" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> id
+	username [label="username
+账户" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> username
+	password [label="password
+密码" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> password
+	yonghu_name [label="yonghu_name
+用户姓名" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> yonghu_name
+	yonghu_photo [label="yonghu_photo
+头像" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> yonghu_photo
+	sex_types [label="sex_types
+性别" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> sex_types
+	yonghu_phone [label="yonghu_phone
+联系方式" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> yonghu_phone
+	yonghu_id_number [label="yonghu_id_number
+身份证号 " fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> yonghu_id_number
+	yonghu_email [label="yonghu_email
+邮箱" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> yonghu_email
+	yonghu_delete [label="yonghu_delete
+逻辑删除" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> yonghu_delete
+	create_time [label="create_time
+创建时间" fontSize=20 fontname="Microsoft YaHei" shape=ellipse]
+	yonghu -> create_time
+}
