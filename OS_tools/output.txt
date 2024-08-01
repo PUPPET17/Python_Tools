@@ -1,0 +1,273 @@
+app
+--------------------------------------------------
+import sys
+from PyQt5.QtWidgets import QApplication
+from ui import TranslatorApp
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = TranslatorApp()
+    sys.exit(app.exec_())
+
+config
+--------------------------------------------------
+{"appid": "20240730002112250", "secret_key": "lu4XOwBMJHDjLXUum_Pz"}
+
+hotkey_listener
+--------------------------------------------------
+import time
+import logging
+import keyboard
+
+class HotkeyListener:
+    def __init__(self, callback):
+        self.callback = callback
+        self.first_time = 0
+
+    def start(self):
+        keyboard.add_hotkey('ctrl+c', self.on_ctrl_c_double)
+
+    def on_ctrl_c_double(self):
+        current_time = time.time()
+        if current_time - self.first_time < 0.5:
+            logging.info(f"Ctrl+C pressed at {current_time}")
+            self.callback()
+        self.first_time = current_time
+
+    def stop(self):
+        keyboard.unhook_all()
+
+
+translator
+--------------------------------------------------
+import hashlib
+import random
+import json
+import urllib.parse
+import http.client
+import logging
+
+class Translator:
+    def __init__(self, appid, secret_key):
+        self.appid = appid
+        self.secret_key = secret_key
+
+    def baidu_translate(self, q, from_lang, to_lang):
+        myurl = '/api/trans/vip/translate'
+        salt = random.randint(32768, 65536)
+        sign = self.appid + q + str(salt) + self.secret_key
+        m1 = hashlib.md5()
+        m1.update(sign.encode('utf-8'))
+        sign = m1.hexdigest()
+        myurl = (myurl + '?appid=' + self.appid + '&q=' + urllib.parse.quote(q) + '&from=' + from_lang + '&to=' + to_lang + '&salt=' + str(salt) + '&sign=' + sign)
+
+        try:
+            http_client = http.client.HTTPConnection('api.fanyi.baidu.com')
+            http_client.request('GET', myurl)
+            response = http_client.getresponse()
+            json_response = response.read().decode('utf-8')
+            result = json.loads(json_response)
+            print(result)
+            return result
+        except Exception as e:
+            logging.error(f"Translation error: {e}")
+            return None
+        finally:
+            if http_client:
+                http_client.close()
+
+
+ui
+--------------------------------------------------
+import sys
+import logging
+import re
+import pyperclip
+import json
+import time
+from PyQt5.QtWidgets import (
+    QLabel, QScrollArea, QVBoxLayout, QWidget, QAction, QMenuBar,
+    QSlider, QHBoxLayout, QMenu, QApplication, QDialog, QLineEdit, QPushButton, QMessageBox
+)
+from PyQt5.QtCore import Qt, QRectF, QPoint
+from PyQt5.QtGui import QFont, QPainterPath, QRegion
+from translator import Translator
+from hotkey_listener import HotkeyListener
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super(SettingsDialog, self).__init__(parent)
+        self.setWindowTitle('Settings')
+        self.setGeometry(300, 300, 300, 200)
+        self.layout = QVBoxLayout()
+
+        self.appid_label = QLabel('App ID:')
+        self.appid_input = QLineEdit()
+        self.secret_key_label = QLabel('Secret Key:')
+        self.secret_key_input = QLineEdit()
+
+        self.save_button = QPushButton('Save')
+        self.save_button.clicked.connect(self.save_settings)
+
+        self.layout.addWidget(self.appid_label)
+        self.layout.addWidget(self.appid_input)
+        self.layout.addWidget(self.secret_key_label)
+        self.layout.addWidget(self.secret_key_input)
+        self.layout.addWidget(self.save_button)
+
+        self.setLayout(self.layout)
+    
+    def save_settings(self):
+        appid = self.appid_input.text()
+        secret_key = self.secret_key_input.text()
+        if not appid or not secret_key:
+            QMessageBox.warning(self, 'Input Error', 'Please enter both App ID and Secret Key.')
+            return
+
+        # Save settings to file or apply them directly
+        try:
+            with open('config.json', 'w') as config_file:
+                json.dump({'appid': appid, 'secret_key': secret_key}, config_file)
+            QMessageBox.information(self, 'Success', 'Settings saved successfully.')
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, 'Error', f'Failed to save settings: {e}')
+
+class TranslatorApp(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.config = self.load_config()
+        self.translator = Translator(self.config['appid'], self.config['secret_key'])
+        self.hotkey_listener = HotkeyListener(self.check_clipboard)
+        self.hotkey_listener.start()
+        self.oldPos = self.pos()
+
+    def initUI(self):
+        self.setWindowTitle('Translator')
+        self.setGeometry(100, 100, 800, 540)
+        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setMinimumSize(400, 200)
+
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+
+        self.result_label = QLabel("Double-press Ctrl+C to translate")
+        self.result_label.setFont(QFont('Roboto', 14))
+        self.result_label.setStyleSheet('''
+            QLabel {
+                background-color: #34495E;
+                color: #FFFFFF;
+                padding: 15px;
+                border-radius: 10px;
+            }
+        ''')
+        self.result_label.setWordWrap(True)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(self.result_label)
+        scroll_area.setWidgetResizable(True)
+
+        self.layout.addWidget(scroll_area)
+
+        self.resize(self.result_label.sizeHint().width() + 20, self.result_label.sizeHint().height() + 50)
+        
+        # 菜单栏
+        menubar = QMenuBar(self)
+        settings_menu = QMenu('Settings', self)
+        menubar.addMenu(settings_menu)
+
+        # 添加设置菜单项
+        settings_action = QAction('百度config', self)
+        settings_action.triggered.connect(self.open_settings)
+        settings_menu.addAction(settings_action)
+        
+        # 添加退出菜单项
+        exit_action = QAction('Exit', self)
+        exit_action.triggered.connect(self.close)
+        settings_menu.addAction(exit_action)
+
+        # 添加透明度滑块
+        self.slider = QSlider(Qt.Horizontal, self)
+        self.slider.setRange(20, 100)  # 设置透明度范围
+        self.slider.setValue(100)  # 默认值为100%不透明
+        self.slider.valueChanged.connect(self.change_transparency)
+
+        # 创建一个新的小部件来包含菜单栏和滑块
+        menubar_layout = QHBoxLayout()
+        menubar_layout.addWidget(menubar)
+        menubar_layout.addWidget(self.slider)
+
+        # 将新的小部件设置为主窗口的菜单栏
+        self.layout.addLayout(menubar_layout)
+
+        self.show()
+        self.setWindowShape()  # 初始化时应用圆角形状
+
+    def open_settings(self):
+        dialog = SettingsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.config = self.load_config()  # 重新加载配置
+            self.translator = Translator(self.config['appid'], self.config['secret_key'])
+    
+    def load_config(self):
+        try:
+            with open('config.json', 'r') as config_file:
+                return json.load(config_file)
+        except FileNotFoundError:
+            return {
+                'appid': '',
+                'secret_key': ''
+            }
+        except json.JSONDecodeError:
+            logging.error('Failed to parse config file.')
+            return {
+                'appid': '',
+                'secret_key': ''
+            }
+
+    def setWindowShape(self):
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), 20, 20)
+        region = QRegion(path.toFillPolygon().toPolygon())
+        self.setMask(region)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)  # 确保调用父类的实现
+        self.setWindowShape()  # 在调整大小时更新窗口形状
+
+    def change_transparency(self, value):
+        self.setWindowOpacity(value / 100.0)
+
+    def closeEvent(self, event):
+        self.hotkey_listener.stop()
+        event.accept()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.oldPos = event.globalPos()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton:
+            delta = QPoint(event.globalPos() - self.oldPos)
+            self.move(self.x() + delta.x(), self.y() + delta.y())
+            self.oldPos = event.globalPos()
+            event.accept()
+
+    def check_clipboard(self):
+        clipboard_content = pyperclip.paste()
+        text = re.sub(r' {3,}', ' ', clipboard_content)
+        text = re.sub(r'\n+', ' ', text)
+        formatted_content = text
+        result = self.translator.baidu_translate(formatted_content, 'auto', 'zh')
+        if result:
+            translation = result.get('trans_result', [{}])[0].get('dst', 'No translation found.')
+            self.result_label.setText(translation)
+        else:
+            self.result_label.setText("Error during translation.")
+
+

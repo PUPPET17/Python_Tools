@@ -93,7 +93,7 @@ if __name__ == '__main__':
     else:
         print("当前程序未以系统权限运行")
     # 设置输入文件夹路径（注意使用原始字符串）
-    folder_path = r'C:\Users\10023\Desktop\fun\12306'
+    folder_path = r'C:\Users\10023\Desktop\fun\copy_to_translate'
     # 设置输出txt文件名
     output_file = r'./OS_tools/output.txt'
     # 合并文件
