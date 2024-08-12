@@ -100,7 +100,7 @@ if __name__ == '__main__':
     count = merge_files(folder_path, output_file)
     print(f"共写入 {count} 个文件。")
     txt_file = r'./OS_tools/output.txt'
-    pdf_file = r'./OS_tools/output.pdf'
-    font_path = r'./OS_tools/SimHei.ttf'
-    txt_to_pdf(txt_file, pdf_file, font_path)
-    print(f"{txt_file} 已转换为 {pdf_file}")  
+    # pdf_file = r'./OS_tools/output.pdf'
+    # font_path = r'./OS_tools/SimHei.ttf'
+    # txt_to_pdf(txt_file, pdf_file, font_path)
+    # print(f"{txt_file} 已转换为 {pdf_file}")  

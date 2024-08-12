@@ -11,7 +11,7 @@ if __name__ == '__main__':
 
 config
 --------------------------------------------------
-{"appid": "20240730002112250", "secret_key": "lu4XOwBMJHDjLXUum_Pz"}
+{"appid": "20240730002112250", "secret_key": "lu4XOwBMJHDjLXUum_Pz", "translation_service": "baidu"}
 
 hotkey_listener
 --------------------------------------------------
@@ -46,11 +46,22 @@ import json
 import urllib.parse
 import http.client
 import logging
+import requests  # Add requests library for Google Translate
 
 class Translator:
-    def __init__(self, appid, secret_key):
+    def __init__(self, appid, secret_key, service):
         self.appid = appid
         self.secret_key = secret_key
+        self.service = service
+
+    def translate(self, q, from_lang, to_lang):
+        if self.service == 'baidu':
+            return self.baidu_translate(q, from_lang, to_lang)
+        elif self.service == 'google':
+            return self.google_translate(q, from_lang, to_lang)
+        else:
+            logging.error(f"Unsupported translation service: {self.service}")
+            return None
 
     def baidu_translate(self, q, from_lang, to_lang):
         myurl = '/api/trans/vip/translate'
@@ -76,21 +87,37 @@ class Translator:
             if http_client:
                 http_client.close()
 
+    def google_translate(self, q, from_lang, to_lang):
+        url = "https://translation.googleapis.com/language/translate/v2"
+        params = {
+            'q': q,
+            'source': from_lang,
+            'target': to_lang,
+            'key': self.secret_key 
+        }
+        try:
+            response = requests.get(url, params=params)
+            result = response.json()
+            print(result)
+            return result
+        except Exception as e:
+            logging.error(f"Translation error: {e}")
+            return None
+
 
 ui
 --------------------------------------------------
-import sys
 import logging
 import re
 import pyperclip
 import json
-import time
 from PyQt5.QtWidgets import (
     QLabel, QScrollArea, QVBoxLayout, QWidget, QAction, QMenuBar,
-    QSlider, QHBoxLayout, QMenu, QApplication, QDialog, QLineEdit, QPushButton, QMessageBox
+    QSlider, QHBoxLayout, QMenu, QApplication, QDialog, QLineEdit, QPushButton, QMessageBox, QComboBox
 )
 from PyQt5.QtCore import Qt, QRectF, QPoint
 from PyQt5.QtGui import QFont, QPainterPath, QRegion
+
 from translator import Translator
 from hotkey_listener import HotkeyListener
 
@@ -100,13 +127,17 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super(SettingsDialog, self).__init__(parent)
         self.setWindowTitle('Settings')
-        self.setGeometry(300, 300, 300, 200)
+        self.setGeometry(300, 300, 300, 250)  # Increased height for new widget
         self.layout = QVBoxLayout()
 
         self.appid_label = QLabel('App ID:')
         self.appid_input = QLineEdit()
         self.secret_key_label = QLabel('Secret Key:')
         self.secret_key_input = QLineEdit()
+
+        self.service_label = QLabel('Translation Service:')
+        self.service_combo = QComboBox()
+        self.service_combo.addItems(['baidu', 'google'])
 
         self.save_button = QPushButton('Save')
         self.save_button.clicked.connect(self.save_settings)
@@ -115,6 +146,8 @@ class SettingsDialog(QDialog):
         self.layout.addWidget(self.appid_input)
         self.layout.addWidget(self.secret_key_label)
         self.layout.addWidget(self.secret_key_input)
+        self.layout.addWidget(self.service_label)
+        self.layout.addWidget(self.service_combo)
         self.layout.addWidget(self.save_button)
 
         self.setLayout(self.layout)
@@ -122,14 +155,14 @@ class SettingsDialog(QDialog):
     def save_settings(self):
         appid = self.appid_input.text()
         secret_key = self.secret_key_input.text()
+        service = self.service_combo.currentText()
         if not appid or not secret_key:
             QMessageBox.warning(self, 'Input Error', 'Please enter both App ID and Secret Key.')
             return
 
-        # Save settings to file or apply them directly
         try:
             with open('config.json', 'w') as config_file:
-                json.dump({'appid': appid, 'secret_key': secret_key}, config_file)
+                json.dump({'appid': appid, 'secret_key': secret_key, 'translation_service': service}, config_file)
             QMessageBox.information(self, 'Success', 'Settings saved successfully.')
             self.accept()
         except Exception as e:
@@ -140,7 +173,7 @@ class TranslatorApp(QWidget):
         super().__init__()
         self.initUI()
         self.config = self.load_config()
-        self.translator = Translator(self.config['appid'], self.config['secret_key'])
+        self.translator = Translator(self.config['appid'], self.config['secret_key'], self.config['translation_service'])
         self.hotkey_listener = HotkeyListener(self.check_clipboard)
         self.hotkey_listener.start()
         self.oldPos = self.pos()
@@ -181,7 +214,7 @@ class TranslatorApp(QWidget):
         menubar.addMenu(settings_menu)
 
         # 添加设置菜单项
-        settings_action = QAction('百度config', self)
+        settings_action = QAction('API Config', self)
         settings_action.triggered.connect(self.open_settings)
         settings_menu.addAction(settings_action)
         
@@ -216,18 +249,26 @@ class TranslatorApp(QWidget):
     def load_config(self):
         try:
             with open('config.json', 'r') as config_file:
-                return json.load(config_file)
+                config = json.load(config_file)
         except FileNotFoundError:
-            return {
+            config = {
                 'appid': '',
-                'secret_key': ''
+                'secret_key': '',
+                'translation_service': 'baidu'  # Default to Baidu if config is missing
             }
         except json.JSONDecodeError:
             logging.error('Failed to parse config file.')
-            return {
+            config = {
                 'appid': '',
-                'secret_key': ''
+                'secret_key': '',
+                'translation_service': 'baidu'  # Default to Baidu if config is corrupted
             }
+        
+        # Ensure all required keys are present
+        if 'translation_service' not in config:
+            config['translation_service'] = 'baidu'
+        
+        return config
 
     def setWindowShape(self):
         path = QPainterPath()
